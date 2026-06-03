@@ -1,15 +1,13 @@
 """Qwen3-14B — с Beam Search"""
-import signal
-
-TOTAL_TIME_LIMIT = 60 * 5 - 20
-
-def timeout_handler(signum, frame):
-    raise RuntimeError("Time limit exceeded")
-
-signal.signal(signal.SIGALRM, timeout_handler)
-signal.alarm(TOTAL_TIME_LIMIT)
-
-
+# import signal
+#
+# TOTAL_TIME_LIMIT = 60 * 5 - 20
+#
+# def timeout_handler(signum, frame):
+#     raise RuntimeError("Time limit exceeded")
+#
+# signal.signal(signal.SIGALRM, timeout_handler)
+# signal.alarm(TOTAL_TIME_LIMIT)
 
 import json
 import pickle
