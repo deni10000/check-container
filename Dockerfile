@@ -8,7 +8,9 @@ RUN pip3 install --no-cache-dir \
     "accelerate" \
     "bitsandbytes>=0.46.1" \
     "vllm==0.11.0" \
-    "transformers==4.56.1"
+    "transformers==4.56.1" \
+    "pymorphy3" \
+    "razdel"
 
 
 WORKDIR /workspace

@@ -1,13 +1,13 @@
 """Qwen3-14B — с Beam Search"""
-# import signal
-#
-# TOTAL_TIME_LIMIT = 60 * 5 - 20
-#
-# def timeout_handler(signum, frame):
-#     raise RuntimeError("Time limit exceeded")
-#
-# signal.signal(signal.SIGALRM, timeout_handler)
-# signal.alarm(TOTAL_TIME_LIMIT)
+import signal
+
+TOTAL_TIME_LIMIT = 60 * 30 - 30
+
+def timeout_handler(signum, frame):
+    raise RuntimeError("Time limit exceeded")
+
+signal.signal(signal.SIGALRM, timeout_handler)
+signal.alarm(TOTAL_TIME_LIMIT)
 
 import json
 import pickle
@@ -23,23 +23,24 @@ import pickle
 
 from vllm import LLM, SamplingParams
 from transformers import AutoTokenizer
+from razdel import tokenize
+import pymorphy3
 
 
 MODEL_DIR = "./weights"
-MAX_NEW_TOKENS = 1024 + 512
+MAX_NEW_TOKENS = 1024 + 256
 # NUM_BEAMS = 2
 
 
-GENERAL_PROMPT = """
-Ты профессиональный переводчик. Переведи текст с английского на русский.
-В ответе должен быть ТОЛЬКО перевод, без комментариев, объяснений и преамбул.
+GENERAL_PROMPT = ["""
+You are a professional translator. Your task is to translate the text from Russian to Abkhaz.
+IMPORTANT: The response must contain only the translation without any comments or clarifications.
+Example:
+Text: The 2016 European Under-18 Tennis Championship takes place in Klosters, Switzerland
+Translation: 18 шықәса зхымҵыц рыбжьара аԥкьаҭмпыл азы Европа Ачемпионат 2016 швеицариатәи ақалақь Клиустер аҿы имҩаԥысит
 
-Пример:
-English: The new AI technology has completely revolutionized the way we work, making complex tasks much simpler.
-Russian: Новая технология искусственного интеллекта полностью изменила подход к работе, сделав сложные задачи значительно проще.
-
-Текст для перевода:
-"""
+Dictionary:
+""", "Text to translate:"]
 
 
 def main() -> None:
@@ -48,8 +49,12 @@ def main() -> None:
 
     tokenizer = AutoTokenizer.from_pretrained(MODEL_DIR, trust_remote_code=True, use_fast=True)
 
+    with open("ru-ab.json", "r", encoding='utf-8') as f:
+        dct = json.load(f)
 
-    print(rows)
+    morph = pymorphy3.MorphAnalyzer()
+
+    # print(rows)
     llm = LLM(
         model=MODEL_DIR,
         dtype="bfloat16",
@@ -61,15 +66,42 @@ def main() -> None:
 
     print(1)
 
-    prompts = [
-        tokenizer.apply_chat_template(
-            [{"role": "user", "content": GENERAL_PROMPT + row["src"]}],
+    prompts = []
+    for row in rows:
+        words = tokenize(row['src'])
+        add_words = {}
+        for word in words:
+            word = word.text
+            if not word.isalpha():
+                continue
+            parsed = morph.parse(word)
+            x = parsed[0].normal_form
+            if x in dct:
+                add_words[x] = dct[x]
+
+        arr = []
+        for x in add_words:
+            arr.append(f'{x} is {", ".join(add_words[x])}')
+
+        prompt = '\n'.join([GENERAL_PROMPT[0]] + arr + [GENERAL_PROMPT[1], row["src"]])
+
+        text = tokenizer.apply_chat_template(
+            [{"role": "user", "content": prompt}],
             tokenize=False,
             add_generation_prompt=True,
-            enable_thinking=False,
+            enable_thinking=False
         )
-        for row in rows
-    ]
+        prompts.append(text)
+
+    # prompts = [
+    #     tokenizer.apply_chat_template(
+    #         [{"role": "user", "content": GENERAL_PROMPT + row["src"]}],
+    #         tokenize=False,
+    #         add_generation_prompt=True,
+    #         enable_thinking=False,
+    #     )
+    #     for row in rows
+    # ]
 
     sampling = SamplingParams(
         temperature=0.0,
@@ -87,7 +119,7 @@ def main() -> None:
         for row, out in zip(rows, outputs)
     ]
 
-    print(results)
+    # print(results)
 
     with open("output.json", "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
