@@ -13,8 +13,18 @@ signal.alarm(TOTAL_TIME_LIMIT)
 
 import json
 import pickle
+# import os
+#
+# os.environ["VLLM_DISABLE_FLASHINFER"] = "1"
+# os.environ["VLLM_USE_FLASHINFER_SAMPLER"] = "0"
+# os.environ["VLLM_ATTENTION_BACKEND"] = "FLASH_ATTN"
+#
+# os.environ["VLLM_TORCH_COMPILE"] = "0"
+# os.environ["VLLM_USE_V1"] = "0"
+# import unsloth
 
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from vllm import LLM, SamplingParams
+from transformers import AutoTokenizer
 
 
 MODEL_DIR = "./weights"
@@ -42,47 +52,43 @@ def main() -> None:
 
 
     print(rows)
-    model = AutoModelForCausalLM.from_pretrained(
-        MODEL_DIR,
-        torch_dtype="bfloat16",
-        device_map="auto",
+    llm = LLM(
+        model=MODEL_DIR,
+        dtype="bfloat16",
+        gpu_memory_utilization=0.9,
+        enforce_eager=False,
+        seed=0,
     )
 
     print(1)
-    results = []
-    for row in rows:
-        messages = [{"role": "user", "content": GENERAL_PROMPT + row["src"]}]
 
-        text = tokenizer.apply_chat_template(
-            messages,
+    prompts = [
+        tokenizer.apply_chat_template(
+            [{"role": "user", "content": GENERAL_PROMPT + row["src"]}],
             tokenize=False,
             add_generation_prompt=True,
             enable_thinking=False,
         )
+        for row in rows
+    ]
 
-        inputs = tokenizer(text, return_tensors="pt").to(model.device)
-        input_len = inputs["input_ids"].shape[-1]
+    sampling = SamplingParams(
+        temperature=0.0,
+        max_tokens=MAX_NEW_TOKENS,
+        top_k=-1,
+    )
 
-        outputs = model.generate(
-            **inputs,
-            max_new_tokens=MAX_NEW_TOKENS,
-            num_beams=NUM_BEAMS,
-            early_stopping=True,
-            do_sample=False,
-            temperature=None,
-        )
+    outputs = llm.generate(prompts, sampling_params=sampling)
 
-        generated_ids = outputs[0][input_len:]
-        response = tokenizer.decode(generated_ids, skip_special_tokens=True)
-
-        results.append({
+    results = [
+        {
             'rid': row['rid'],
-            'translation': response.strip(),
-        })
+            'translation': out.outputs[0].text.strip(),
+        }
+        for row, out in zip(rows, outputs)
+    ]
 
-        print(results[-1])
-
-        del inputs, outputs
+    print(results)
 
     with open("output.json", "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
