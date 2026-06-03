@@ -6,9 +6,9 @@ RUN apt-get update && apt-get install -y build-essential
 
 RUN pip3 install --no-cache-dir \
     "accelerate" \
-    "transformers==5.5.0" \
     "bitsandbytes>=0.46.1" \
-    "vllm"
+    "vllm==0.11.0" \
+    "transformers==4.56.1"
 
 
 WORKDIR /workspace

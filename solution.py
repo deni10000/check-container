@@ -29,7 +29,7 @@ from transformers import AutoTokenizer
 
 MODEL_DIR = "./weights"
 MAX_NEW_TOKENS = 1024 + 512
-NUM_BEAMS = 2
+# NUM_BEAMS = 2
 
 
 GENERAL_PROMPT = """
@@ -58,6 +58,7 @@ def main() -> None:
         gpu_memory_utilization=0.9,
         enforce_eager=False,
         seed=0,
+        max_model_len=MAX_NEW_TOKENS * 2
     )
 
     print(1)
